@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateway Admin</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <h1>Gateway Admin</h1>
+        <p>Authenticate via Identity Provider</p>
+        <form id="login-form">
+            <input type="password" id="token-input" placeholder="Paste authorized JWT..." required autocomplete="off">
+            <button type="submit">Authenticate</button>
+        </form>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboard">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h2>Gateway</h2>
+            <button class="nav-btn active" data-target="logs-section">Audit Logs</button>
+            <button class="nav-btn" data-target="kb-section">Knowledge Base</button>
+            <div style="flex-grow: 1;"></div>
+            <button class="nav-btn" id="logout-btn" style="color: var(--accent-red); margin-top: auto;">Sign Out</button>
+        </div>
+
+        <!-- Content -->
+        <div class="content-area">
+            
+            <!-- Audit Logs Section -->
+            <div id="logs-section" class="content-section active">
+                <div class="section-header">
+                    <h3>Compliance Audit Stream</h3>
+                    <p>Live SOC2 / HIPAA proxy traces</p>
+                </div>
+                <table id="logs-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Role</th>
+                            <th>Identity Hash</th>
+                            <th>Tokens (In/Out)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- dynamically populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Knowledge Base Section -->
+            <div id="kb-section" class="content-section">
+                <div class="section-header">
+                    <h3>Inject Knowledge Vector</h3>
+                    <p>Seed ChromaDB to inform RAG payloads dynamically.</p>
+                </div>
+                
+                <form id="kb-form" style="max-width: 600px;">
+                    <div class="form-group">
+                        <label>Document ID</label>
+                        <input type="text" id="kb-doc-id" placeholder="e.g. policy_remote_2026" required>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Target Role</label>
+                            <input type="text" id="kb-role" placeholder="e.g. admin, user, healthcare_provider" required>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Topic Tag</label>
+                            <input type="text" id="kb-topic" placeholder="e.g. hr, security" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Vector Content</label>
+                        <textarea id="kb-content" placeholder="Paste the authoritative context here..." required></textarea>
+                    </div>
+                    
+                    <button type="submit" style="width: auto; padding: 0.75rem 2rem;">Inject Vector</button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Toast UI -->
+    <div id="toast">Validation failed</div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

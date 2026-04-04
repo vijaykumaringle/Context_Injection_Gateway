@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Depends, Request, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from auth import verify_token, User
 from proxy import proxy_request
@@ -17,6 +19,13 @@ from rag_engine import collection
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Context Injection Gateway")
+
+# Mount Static Files for the Dashboard
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/admin", response_class=FileResponse)
+async def admin_dashboard():
+    return "static/index.html"
 
 @app.on_event("startup")
 async def startup_event():
