@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+chromadb
+pydantic
+python-jose[cryptography]
+python-dotenv
+sqlalchemy

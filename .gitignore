@@ -1,0 +1,34 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Persistent Databases
+gateway.db
+sqlite3.db
+/vector_store/
+
+# Logs and Caches
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+
+# IDE and Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+generate_tokens.pyc
