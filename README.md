@@ -1,50 +1,70 @@
 # Context Injection Gateway
 
-A headless reverse proxy middleware designed to intercept outbound LLM API requests and dynamically inject authoritative, role-restricted RAG context from internal databases prior to model inference. 
+A headless reverse proxy middleware designed to intercept outbound LLM API requests and dynamically inject authoritative, role-restricted RAG context from internal databases prior to model inference.
 
-Built with FastAPI, httpx, ChromaDB, and SQLAlchemy. Features SOC2/HIPAA compliance logging mechanisms and JWT-based Role-Based Access Control (RBAC).
+Built with FastAPI, httpx, ChromaDB, and SQLAlchemy. Features SOC2/HIPAA compliance logging, semantic caching, rate limiting, and a premium visual dashboard.
 
-## Setup
-1. Define your upstream API logic in `.env` (Defaults to local Ollama logic via `http://localhost:11434`).
-2. Install dependencies: `pip install -r requirements.txt`
-3. Run the gateway: `python main.py` or `uvicorn main:app --reload`
-*Note: Our SQLite database (`gateway.db`) and vector database (`./vector_store`) will dynamically auto-generate themselves upon runtime without the need for external containers!*
+## 🚀 Key Features
 
-## Persistent Databases
+- **Dynamic RAG Injection**: Automatically appends role-restricted context to prompts based on vector similarity.
+- **Semantic Caching**: Bypasses LLM inference for similar queries using an internal ChromaDB cache, reducing latency and costs.
+- **Rate Limiting**: Enforces usage quotas (e.g., 100 req/hr) based on persistent SQLite audit logs to prevent infrastructure abuse.
+- **Compliance Logging**: SOC2/HIPAA compliant logging with anonymized user identity hashes and strict PII exclusion.
+- **Premium Admin Dashboard**: A sleek, dark-mode visual interface to monitor logs and manage knowledge base vectors.
 
-The gateway relies on two native data layers:
-1. **ChromaDB (`/vector_store`)**: A persistent vector database that stores all authoritative knowledge context for RAG injection.
-2. **SQLite via SQLAlchemy (`gateway.db`)**: A relational structure that holds the `users` dimension table and the SOC2 compliant `audit_logs` ledger.
+## 🛠 Setup
 
-## Gateway Core Usage
+1. **Configure Environment**: Create a `.env` file (copied from `.env.template` if available).
+   - `UPSTREAM_API_BASE`: Defaults to `http://localhost:11434` (Ollama).
+   - `UPSTREAM_API_KEY`: Your provider API key (or `ollama` for local).
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Run the Gateway**:
+   ```bash
+   python main.py
+   ```
+   *Note: SQLite (`gateway.db`) and ChromaDB (`./vector_store`) will auto-initialize on first run.*
+
+## 📊 Admin Dashboard
+
+Access the visual dashboard at: `http://localhost:8000/admin`
+
+- **Authenticate**: Use a generated Admin JWT to log in.
+- **Audit Stream**: Real-time visualization of proxied requests, token counts, and status codes.
+- **Knowledge Base**: Direct UI for injecting new context strings into the vector store with specific role/topic mappings.
+
+## 🔒 Security & RBAC
 
 ### 1. Generating Mock Tokens
-Run `python generate_tokens.py` to mint mock JWTs assigned to specific roles (like `admin` or `healthcare_provider`). When an unknown token interacts with the gateway for the first time, its identity is lazily-synced into the SQL `users` table seamlessly securely sealing the identity.
+Run `python generate_tokens.py` to mint mock JWTs for roles like `admin`, `healthcare_provider`, or `user`. The gateway lazily-syncs these identities into the SQL `users` table upon their first interaction.
 
-### 2. Admin Capabilities: Context & Logs
-With an admin token, you can directly interact with the management endpoints:
-- **`POST /api/documents`**: Empowers admins to seed new knowledge directly into the Persistent ChromaDB layer. Requires `document`, `role`, `topic`, and `doc_id` inside the payload.
-- **`GET /api/logs`**: Visualizes the latest 50 compliant audit traces from the SQL db.
+### 2. Rate Limiting
+The gateway enforces a quota of **100 requests per hour** per user. It checks the persistent `audit_logs` table in SQLite before processing any proxied request. If the limit is reached, it returns an `HTTP 429 Too Many Requests`.
 
-### 3. Proxied Inference (OpenAI Format)
-The proxy intercepts the raw `POST /v1/chat/completions` pathway.
+### 3. Identity Resolution
+Audit logs store an anonymized `user_pseudo_id`. To resolve this to a real user during an investigation:
+```bash
+python resolve_audit_user.py <HASH>
+```
+
+## 🧠 Semantic Caching
+
+The gateway maintains a semantic cache in ChromaDB.
+- **Logic**: If an incoming prompt has a vector distance `< 0.5` to a previously cached prompt (within the same role), the gateway returns the cached response instantly (~50ms latency).
+- **Benefit**: Drastically reduces LLM compute costs and local GPU usage.
+
+## 📡 Proxied Inference (OpenAI Format)
+
+The gateway intercepts standard `POST /v1/chat/completions` requests.
 ```bash
 curl -X POST "http://localhost:8000/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <MOCK_ROLE_TOKEN>" \
+  -H "Authorization: Bearer <TOKEN>" \
   -d '{
     "model": "llama3",
     "messages": [{"role": "user", "content": "How do I file the surgical procedure?"}]
   }'
 ```
-Upon interception, the gateway runs the last `user` message against the vector `role` logic. Matches are strategically appended as `system` instructions prior to the forward.
-
-## Secure Identity Resolution (`resolve_audit_user.py`)
-
-For adherence to HIPAA compliance, the SQL `audit_logs` securely convert plaintext User IDs into salted hashes (`user_pseudo_id`) prior to committing the trace, effectively prohibiting unauthorized identity leaks on dashboard analytics.
-
-However, incident response administrators retain the capability to resolve suspicious payloads backwards utilizing the internal tool:
-```bash
-python resolve_audit_user.py <user_pseudo_id>
-```
-The script internally queries the mapped SQLite database recursively processing identity hashes until a confident forward-computed match identifies the explicit culprit.
+Context is injected as `system` instructions before being forwarded to the upstream local or cloud LLM.

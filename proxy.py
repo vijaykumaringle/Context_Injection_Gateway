@@ -30,6 +30,22 @@ async def proxy_request(request: Request, user: User, path: str):
     # In production, use tiktoken
     input_tokens_estimate = len(str(body)) // 4
 
+    # --- CACHE INTERCEPTION ---
+    from semantic_cache import check_semantic_cache, save_to_cache
+    
+    last_user_msg = ""
+    for msg in reversed(body.get("messages", [])):
+        if msg.get("role") == "user":
+            last_user_msg = msg.get("content", "")
+            break
+            
+    if last_user_msg:
+        cached_resp = check_semantic_cache(last_user_msg, role=user.role)
+        if cached_resp:
+            duration_ms = int((time.time() - start_time) * 1000)
+            log_api_request(user.user_id, user.role, path, input_tokens_estimate, len(cached_resp)//4, 200, duration_ms)
+            return Response(content=cached_resp, status_code=200, media_type="application/json")
+
     # --- INJECTION ---
     modified_body = inject_context_into_payload(body, role=user.role)
 
@@ -56,6 +72,13 @@ async def proxy_request(request: Request, user: User, path: str):
         
         duration_ms = int((time.time() - start_time) * 1000)
         
+        if upstream_resp.status_code == 200 and last_user_msg:
+            # We save the raw string back to the cache
+            try:
+                save_to_cache(last_user_msg, user.role, upstream_resp.text)
+            except Exception as e:
+                logger.error(f"Error saving successful response to cache: {e}")
+
         # Log the compliant record
         log_api_request(
             user_id=user.user_id,

@@ -56,8 +56,10 @@ async def get_logs(db: Session = Depends(get_db), user: User = Depends(verify_to
     logs = db.query(models.AuditLog).order_by(models.AuditLog.timestamp.desc()).limit(50).all()
     return logs
 
+from ratelimiter import check_rate_limit
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-async def catch_all_proxy(request: Request, path: str, user: User = Depends(verify_token)):
+async def catch_all_proxy(request: Request, path: str, user: User = Depends(check_rate_limit)):
     """
     Catch-all route that handles any request sent to the gateway.
     Typically clients will send POST /v1/chat/completions to this gateway instead of api.openai.com.
