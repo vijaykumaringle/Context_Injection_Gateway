@@ -1,22 +1,24 @@
-# Context Injection Gateway
+# Context Injection Gateway (Enterprise Edition)
 
-A headless reverse proxy middleware designed to intercept outbound LLM API requests and dynamically inject authoritative, role-restricted RAG context from internal databases prior to model inference.
+A headless, high-performance reverse proxy middleware designed to intercept outbound LLM API requests and dynamically inject authoritative, role-restricted RAG context from internal databases prior to model inference.
 
-Built with FastAPI, httpx, ChromaDB, and SQLAlchemy. Features SOC2/HIPAA compliance logging, semantic caching, rate limiting, and a premium visual dashboard.
+Built with FastAPI, httpx, ChromaDB, BM25, and SQLAlchemy. Features robust Security Interceptors, Advanced RAG, Tiered Rate Limiting, and a premium visual dashboard.
 
-## 🚀 Key Features
+## 🚀 Enterprise Features
 
-- **Dynamic RAG Injection**: Automatically appends role-restricted context to prompts based on vector similarity.
-- **Semantic Caching**: Bypasses LLM inference for similar queries using an internal ChromaDB cache, reducing latency and costs.
-- **Rate Limiting**: Enforces usage quotas (e.g., 100 req/hr) based on persistent SQLite audit logs to prevent infrastructure abuse.
-- **Compliance Logging**: SOC2/HIPAA compliant logging with anonymized user identity hashes and strict PII exclusion.
-- **Premium Admin Dashboard**: A sleek, dark-mode visual interface to monitor logs and manage knowledge base vectors.
+- **DLP / PII Masking**: Real-time regex interception engine (`dlp.py`) that redacts sensitive PII (SSNs, Phones, Emails) before they leave your network, seamlessly restoring them in the LLM response.
+- **Prompt Guardrails**: Heuristic jailbreak detection (`guardrails.py`) that terminates adversarial inputs instantly with `HTTP 403 Forbidden`.
+- **Intelligent Model Routing**: Asynchronous routing (`router.py`) that automatically dispatches `llama3` queries to local GPU clusters and `gpt-*` to cloud providers while injecting the required provider API Keys.
+- **Advanced Hybrid RAG**: Merges Semantic Vector Search (ChromaDB) with Exact Keyword Search (BM25) using Reciprocal Rank Fusion (RRF) for top-tier context accuracy.
+- **Semantic Caching with TTL**: Bypasses LLM inference for similar queries, now fortified with a 24-hour Time-To-Live (TTL) expiration to prevent serving stale data.
+- **Tiered Token Quotas**: Deeply integrated rate limiter that monitors total token consumption across `free`, `pro`, and `enterprise` tier allocations.
+- **Premium Admin Dashboard**: A sleek, dark-mode visual interface to monitor SOC2/HIPAA logs, inject vectors, and manage API Keys.
 
 ## 🛠 Setup
 
 1. **Configure Environment**: Create a `.env` file (copied from `.env.template` if available).
-   - `UPSTREAM_API_BASE`: Defaults to `http://localhost:11434` (Ollama).
-   - `UPSTREAM_API_KEY`: Your provider API key (or `ollama` for local).
+   - `OPENAI_API_KEY`: API key for GPT models (Cloud).
+   - `OLLAMA_API_BASE`: API base URL for Llama models (Local).
 2. **Install Dependencies**:
    ```bash
    pip install -r requirements.txt
@@ -33,27 +35,22 @@ Access the visual dashboard at: `http://localhost:8000/admin`
 
 - **Authenticate**: Use a generated Admin JWT to log in.
 - **Audit Stream**: Real-time visualization of proxied requests, token counts, and status codes.
-- **Knowledge Base**: Direct UI for injecting new context strings into the vector store with specific role/topic mappings.
+- **API Key Management**: Generate tiered API keys (`free`, `pro`, `enterprise`) and revoke them instantly via the UI.
+- **Knowledge Base**: Direct UI for injecting new context strings into the hybrid search engine with specific role/topic mappings.
 
 ## 🔒 Security & RBAC
 
 ### 1. Generating Mock Tokens
 Run `python generate_tokens.py` to mint mock JWTs for roles like `admin`, `healthcare_provider`, or `user`. The gateway lazily-syncs these identities into the SQL `users` table upon their first interaction.
 
-### 2. Rate Limiting
-The gateway enforces a quota of **100 requests per hour** per user. It checks the persistent `audit_logs` table in SQLite before processing any proxied request. If the limit is reached, it returns an `HTTP 429 Too Many Requests`.
+### 2. Tiered Rate Limiting
+The gateway enforces token-based quotas using the persistent `audit_logs` table in SQLite. It aggregates `input_tokens + output_tokens` consumed over the last hour. If the user exceeds their API Key tier limit, the proxy instantly returns `HTTP 429 Too Many Requests`.
 
 ### 3. Identity Resolution
-Audit logs store an anonymized `user_pseudo_id`. To resolve this to a real user during an investigation:
+Audit logs securely store an anonymized `user_pseudo_id`. To resolve this to a real user during an investigation:
 ```bash
 python resolve_audit_user.py <HASH>
 ```
-
-## 🧠 Semantic Caching
-
-The gateway maintains a semantic cache in ChromaDB.
-- **Logic**: If an incoming prompt has a vector distance `< 0.5` to a previously cached prompt (within the same role), the gateway returns the cached response instantly (~50ms latency).
-- **Benefit**: Drastically reduces LLM compute costs and local GPU usage.
 
 ## 📡 Proxied Inference (OpenAI Format)
 
@@ -63,8 +60,8 @@ curl -X POST "http://localhost:8000/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <TOKEN>" \
   -d '{
-    "model": "llama3",
-    "messages": [{"role": "user", "content": "How do I file the surgical procedure?"}]
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "How do I file the surgical procedure for Patient <SSN>?"}]
   }'
 ```
-Context is injected as `system` instructions before being forwarded to the upstream local or cloud LLM.
+Context is injected as `system` instructions. Any SSN is masked by DLP, routed to OpenAI, and securely restored upon return.

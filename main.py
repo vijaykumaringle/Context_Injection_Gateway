@@ -13,7 +13,7 @@ from logger import logger
 from database import engine, Base, get_db
 import models
 from sqlalchemy.orm import Session
-from rag_engine import collection
+from rag_engine import add_document_to_kb
 
 # Ensure tables are created
 models.Base.metadata.create_all(bind=engine)
@@ -42,11 +42,7 @@ async def add_document(payload: DocumentPayload, user: User = Depends(verify_tok
     if user.role != "admin":
         return Response(status_code=403, content="Admins only")
     
-    collection.add(
-        documents=[payload.document],
-        metadatas=[{"role": payload.role, "topic": payload.topic}],
-        ids=[payload.doc_id]
-    )
+    await add_document_to_kb(payload.doc_id, payload.document, payload.role, payload.topic)
     return {"status": "success", "doc_id": payload.doc_id}
 
 @app.get("/api/logs")
@@ -62,6 +58,52 @@ async def get_users(db: Session = Depends(get_db), user: User = Depends(verify_t
         return Response(status_code=403, content="Admins only")
     users = db.query(models.APIUser).order_by(models.APIUser.created_at.desc()).limit(50).all()
     return users
+
+import hashlib
+import secrets
+
+class ApiKeyPayload(BaseModel):
+    user_id: str
+    tier: str
+
+@app.get("/api/keys")
+async def get_keys(db: Session = Depends(get_db), user: User = Depends(verify_token)):
+    if user.role != "admin":
+        return Response(status_code=403, content="Admins only")
+    keys = db.query(models.ApiKey).order_by(models.ApiKey.created_at.desc()).all()
+    return keys
+
+@app.post("/api/keys")
+async def create_key(payload: ApiKeyPayload, db: Session = Depends(get_db), user: User = Depends(verify_token)):
+    if user.role != "admin":
+        return Response(status_code=403, content="Admins only")
+    
+    # Generate a dummy key format for demonstration
+    raw_key = f"sk-{secrets.token_urlsafe(16)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    prefix = raw_key[:7]
+    
+    new_key = models.ApiKey(
+        key_hash=key_hash,
+        prefix=prefix,
+        user_id=payload.user_id,
+        tier=payload.tier
+    )
+    db.add(new_key)
+    db.commit()
+    
+    return {"raw_key": raw_key, "user_id": payload.user_id, "tier": payload.tier}
+
+@app.delete("/api/keys/{key_id}")
+async def revoke_key(key_id: int, db: Session = Depends(get_db), user: User = Depends(verify_token)):
+    if user.role != "admin":
+        return Response(status_code=403, content="Admins only")
+        
+    key = db.query(models.ApiKey).filter(models.ApiKey.id == key_id).first()
+    if key:
+        key.is_revoked = True
+        db.commit()
+    return {"status": "revoked"}
 
 from ratelimiter import check_rate_limit
 

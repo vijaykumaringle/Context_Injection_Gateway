@@ -6,3 +6,4 @@ pydantic
 python-jose[cryptography]
 python-dotenv
 sqlalchemy
+rank_bm25

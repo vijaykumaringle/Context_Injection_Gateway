@@ -15,7 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const toast = document.getElementById('toast');
     const logsTbody = document.querySelector('#logs-table tbody');
     const identitiesTbody = document.querySelector('#identities-table tbody');
+    const apikeysTbody = document.querySelector('#apikeys-table tbody');
     const kbForm = document.getElementById('kb-form');
+    const apikeysForm = document.getElementById('apikeys-form');
 
     // --- Initialization ---
     if (authToken) {
@@ -38,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initChart();
         fetchLogs();
         fetchIdentities();
+        fetchKeys();
     }
 
     function handleLogout() {
@@ -63,6 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if(targetId === 'identities-section') {
                 fetchIdentities();
+            }
+            if(targetId === 'apikeys-section') {
+                fetchKeys();
             }
         });
     });
@@ -279,5 +285,84 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Network error injecting vector');
         }
     });
+
+    // --- API Keys Management ---
+    async function fetchKeys() {
+        if (!authToken) return;
+        try {
+            const resp = await fetch('/api/keys', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                apikeysTbody.innerHTML = '';
+                if (data.length === 0) {
+                    apikeysTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No API keys generated yet.</td></tr>`;
+                    return;
+                }
+                data.forEach(key => {
+                    const tr = document.createElement('tr');
+                    const statusHtml = key.is_revoked ? `<span class="status-badge status-error">Revoked</span>` : `<span class="status-badge status-success">Active</span>`;
+                    const actionHtml = key.is_revoked ? `` : `<button onclick="window.revokeKey(${key.id})" style="padding: 0.25rem 0.5rem; background: var(--accent-red);">Revoke</button>`;
+                    
+                    tr.innerHTML = `
+                        <td>${key.user_id}</td>
+                        <td style="font-family: monospace; color: var(--text-secondary);">${key.prefix}...</td>
+                        <td><span style="color: var(--accent-blue);">${key.tier}</span></td>
+                        <td>${statusHtml}</td>
+                        <td>${actionHtml}</td>
+                    `;
+                    apikeysTbody.appendChild(tr);
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to fetch API keys');
+        }
+    }
+
+    if (apikeysForm) {
+        apikeysForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                user_id: document.getElementById('apikey-user').value,
+                tier: document.getElementById('apikey-tier').value
+            };
+            try {
+                const resp = await fetch('/api/keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify(payload)
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    alert(`API Key Generated: ${data.raw_key}\n\nPlease copy this now. It will not be shown again.`);
+                    showToast('API Key generated successfully', true);
+                    apikeysForm.reset();
+                    fetchKeys();
+                } else {
+                    showToast(`Failed to generate key: ${resp.status}`);
+                }
+            } catch (err) {
+                showToast('Network error generating key');
+            }
+        });
+    }
+
+    window.revokeKey = async function(id) {
+        if(!confirm("Are you sure you want to revoke this API key?")) return;
+        try {
+            const resp = await fetch(`/api/keys/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (resp.ok) {
+                showToast('Key revoked successfully', true);
+                fetchKeys();
+            }
+        } catch (err) {
+            showToast('Network error revoking key');
+        }
+    };
 
 });
