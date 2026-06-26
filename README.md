@@ -7,11 +7,13 @@ Built with FastAPI, httpx, ChromaDB, BM25, and SQLAlchemy. Features robust Secur
 ## 🚀 Enterprise Features
 
 - **DLP / PII Masking**: Real-time regex interception engine (`dlp.py`) that redacts sensitive PII (SSNs, Phones, Emails) before they leave your network, seamlessly restoring them in the LLM response.
-- **Prompt Guardrails**: Heuristic jailbreak detection (`guardrails.py`) that terminates adversarial inputs instantly with `HTTP 403 Forbidden`.
-- **Intelligent Model Routing**: Asynchronous routing (`router.py`) that automatically dispatches `llama3` queries to local GPU clusters and `gpt-*` to cloud providers while injecting the required provider API Keys.
-- **Advanced Hybrid RAG**: Merges Semantic Vector Search (ChromaDB) with Exact Keyword Search (BM25) using Reciprocal Rank Fusion (RRF) for top-tier context accuracy.
+- **Prompt Guardrails**: Local Hugging Face ML model (`distilbert`) jailbreak classification (`guardrails.py`) that analyzes adversarial inputs instantly and terminates them with `HTTP 403 Forbidden`.
+- **Intelligent Model Routing**: Asynchronous routing (`router.py`) with **Auto-Failover Loops**. If a primary route (like `gpt-4`) fails or hits rate limits, the gateway seamlessly falls back to a secondary route (like local `llama3`).
+- **Advanced Hybrid RAG**: Merges Semantic Vector Search (ChromaDB) with Exact Keyword Search (BM25) using Reciprocal Rank Fusion (RRF), and then deeply analyzes the context using a **Cross-Encoder Semantic Reranker** for pristine context accuracy.
 - **Semantic Caching with TTL**: Bypasses LLM inference for similar queries, now fortified with a 24-hour Time-To-Live (TTL) expiration to prevent serving stale data.
+- **Streaming Token Tracking**: Accurately tracks output tokens inside asynchronous streams using `tiktoken` for pristine billing.
 - **Tiered Token Quotas**: Deeply integrated rate limiter that monitors total token consumption across `free`, `pro`, and `enterprise` tier allocations.
+- **Prometheus Observability**: Automatically exposes a `/metrics` endpoint for Grafana, tracking total token consumption, cache hits, and HTTP latency.
 - **Premium Admin Dashboard**: A sleek, dark-mode visual interface to monitor SOC2/HIPAA logs, inject vectors, and manage API Keys.
 
 ## 🛠 Setup

@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsTbody = document.querySelector('#logs-table tbody');
     const identitiesTbody = document.querySelector('#identities-table tbody');
     const apikeysTbody = document.querySelector('#apikeys-table tbody');
+    const kbTbody = document.querySelector('#kb-table tbody');
     const kbForm = document.getElementById('kb-form');
     const apikeysForm = document.getElementById('apikeys-form');
 
@@ -41,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchLogs();
         fetchIdentities();
         fetchKeys();
+        fetchKB();
     }
 
     function handleLogout() {
@@ -66,6 +68,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if(targetId === 'identities-section') {
                 fetchIdentities();
+            }
+            if(targetId === 'kb-section') {
+                fetchKB();
             }
             if(targetId === 'apikeys-section') {
                 fetchKeys();
@@ -278,6 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (resp.ok) {
                 showToast('Vector successfully injected into ChromaDB!', true);
                 kbForm.reset();
+                fetchKB();
             } else {
                 showToast(`Failed to inject: ${resp.status}`);
             }
@@ -285,6 +291,39 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Network error injecting vector');
         }
     });
+
+    // --- Fetch Knowledge Base ---
+    async function fetchKB() {
+        if (!authToken) return;
+        try {
+            const resp = await fetch('/api/documents', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                kbTbody.innerHTML = '';
+                if (data.length === 0) {
+                    kbTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No documents injected yet.</td></tr>`;
+                    return;
+                }
+                data.forEach(doc => {
+                    const tr = document.createElement('tr');
+                    const snippet = doc.document.length > 60 ? doc.document.substring(0, 60) + '...' : doc.document;
+                    
+                    tr.innerHTML = `
+                        <td style="font-family: monospace;">${doc.doc_id}</td>
+                        <td><span style="color: var(--accent-blue);">${doc.role}</span></td>
+                        <td>${doc.topic}</td>
+                        <td style="color: var(--text-secondary); font-size: 0.9em;">${snippet}</td>
+                    `;
+                    kbTbody.appendChild(tr);
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to fetch knowledge base');
+        }
+    }
 
     // --- API Keys Management ---
     async function fetchKeys() {

@@ -13,12 +13,17 @@ from logger import logger
 from database import engine, Base, get_db
 import models
 from sqlalchemy.orm import Session
-from rag_engine import add_document_to_kb
+from rag_engine import add_document_to_kb, get_all_documents
 
 # Ensure tables are created
 models.Base.metadata.create_all(bind=engine)
 
+from prometheus_fastapi_instrumentator import Instrumentator
+
 app = FastAPI(title="Context Injection Gateway")
+
+# Expose Prometheus /metrics endpoint
+Instrumentator().instrument(app).expose(app)
 
 # Mount Static Files for the Dashboard
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -44,6 +49,14 @@ async def add_document(payload: DocumentPayload, user: User = Depends(verify_tok
     
     await add_document_to_kb(payload.doc_id, payload.document, payload.role, payload.topic)
     return {"status": "success", "doc_id": payload.doc_id}
+
+@app.get("/api/documents")
+async def list_documents(user: User = Depends(verify_token)):
+    if user.role != "admin":
+        return Response(status_code=403, content="Admins only")
+    
+    docs = await get_all_documents()
+    return docs
 
 @app.get("/api/logs")
 async def get_logs(db: Session = Depends(get_db), user: User = Depends(verify_token)):
