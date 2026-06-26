@@ -138,3 +138,27 @@ async def retrieve_context_for_role(prompt: str, role: str, num_results: int = 1
     except Exception as e:
         logger.error(f"Error querying Hybrid RAG: {e}")
         return ""
+
+async def get_all_documents():
+    """
+    Retrieves all stored documents from ChromaDB.
+    """
+    def _get():
+        return collection.get()
+    
+    data = await run_in_threadpool(_get)
+    
+    results = []
+    docs = data.get("documents") or []
+    metas = data.get("metadatas") or []
+    ids = data.get("ids") or []
+    
+    for i in range(len(ids)):
+        results.append({
+            "doc_id": ids[i],
+            "document": docs[i] if i < len(docs) else "",
+            "role": metas[i].get("role", "unknown") if i < len(metas) else "unknown",
+            "topic": metas[i].get("topic", "unknown") if i < len(metas) else "unknown"
+        })
+        
+    return results
