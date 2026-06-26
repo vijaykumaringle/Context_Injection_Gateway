@@ -11,23 +11,27 @@ logger = logging.getLogger("gateway.ratelimit")
 # Max requests allowed per hour per user
 RATE_LIMIT_QUOTA = 100
 
-def check_rate_limit(user: User = Depends(verify_token)) -> User:
+from fastapi.concurrency import run_in_threadpool
+
+def check_rate_limit_sync(hashed_user: str) -> int:
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    db = SessionLocal()
+    request_count = db.query(AuditLog).filter(
+        AuditLog.user_pseudo_id == hashed_user,
+        AuditLog.timestamp >= one_hour_ago
+    ).count()
+    db.close()
+    return request_count
+
+async def check_rate_limit(user: User = Depends(verify_token)) -> User:
     """
     Middleware dependency to enforce usage quotas.
-    Queries the SQLite AuditLog for the last 60 minutes for this specific user.
+    Queries the SQLite AuditLog asynchronously.
     """
     hashed_user = hashlib.sha256(user.user_id.encode()).hexdigest()[:16]
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
     
     try:
-        db = SessionLocal()
-        # Count all entries for this user in the last hour
-        request_count = db.query(AuditLog).filter(
-            AuditLog.user_pseudo_id == hashed_user,
-            AuditLog.timestamp >= one_hour_ago
-        ).count()
-        
-        db.close()
+        request_count = await run_in_threadpool(check_rate_limit_sync, hashed_user)
         
         if request_count >= RATE_LIMIT_QUOTA:
             logger.warning(f"Rate limit breached by {hashed_user}. (Count: {request_count})")

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gateway Admin</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -23,7 +24,9 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <h2>Gateway</h2>
-            <button class="nav-btn active" data-target="logs-section">Audit Logs</button>
+            <button class="nav-btn active" data-target="analytics-section">Analytics</button>
+            <button class="nav-btn" data-target="logs-section">Audit Stream</button>
+            <button class="nav-btn" data-target="identities-section">Identities</button>
             <button class="nav-btn" data-target="kb-section">Knowledge Base</button>
             <div style="flex-grow: 1;"></div>
             <button class="nav-btn" id="logout-btn" style="color: var(--accent-red); margin-top: auto;">Sign Out</button>
@@ -32,8 +35,33 @@
         <!-- Content -->
         <div class="content-area">
             
+            <!-- Analytics Section -->
+            <div id="analytics-section" class="content-section active">
+                <div class="section-header">
+                    <h3>Gateway Analytics</h3>
+                    <p>Live token usage and request volumes</p>
+                </div>
+                <div class="chart-container" style="position: relative; height:40vh; width:100%; margin-bottom: 2rem;">
+                    <canvas id="usageChart"></canvas>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h4>Total Requests</h4>
+                        <p id="stat-req-count">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Total Tokens</h4>
+                        <p id="stat-token-count">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Avg Latency</h4>
+                        <p id="stat-avg-latency">0ms</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Audit Logs Section -->
-            <div id="logs-section" class="content-section active">
+            <div id="logs-section" class="content-section">
                 <div class="section-header">
                     <h3>Compliance Audit Stream</h3>
                     <p>Live SOC2 / HIPAA proxy traces</p>
@@ -49,7 +77,26 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- dynamically populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Identities Section -->
+            <div id="identities-section" class="content-section">
+                <div class="section-header">
+                    <h3>Identity Resolution</h3>
+                    <p>Known authenticated identities mapped to their compliance hashes</p>
+                </div>
+                <table id="identities-table">
+                    <thead>
+                        <tr>
+                            <th>User ID (Real)</th>
+                            <th>Pseudo Hash</th>
+                            <th>Role</th>
+                            <th>First Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                     </tbody>
                 </table>
             </div>

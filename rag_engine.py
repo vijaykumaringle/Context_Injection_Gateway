@@ -1,6 +1,7 @@
 import chromadb
 from chromadb.config import Settings
 import logging
+from fastapi.concurrency import run_in_threadpool
 
 logger = logging.getLogger("gateway.rag")
 
@@ -38,17 +39,20 @@ if collection.count() == 0:
 else:
     logger.info(f"Loaded existing ChromaDB collection with {collection.count()} items.")
 
-def retrieve_context_for_role(prompt: str, role: str, num_results: int = 1) -> str:
+def _query_collection_sync(prompt: str, role: str, num_results: int):
+    return collection.query(
+        query_texts=[prompt],
+        n_results=num_results,
+        where={"role": role}
+    )
+
+async def retrieve_context_for_role(prompt: str, role: str, num_results: int = 1) -> str:
     """
-    Queries the vector database for the given prompt, filtering by the user's role.
+    Queries the vector database for the given prompt, filtering by the user's role asynchronously.
     """
     logger.debug(f"Querying vector DB for role: {role}")
     try:
-        results = collection.query(
-            query_texts=[prompt],
-            n_results=num_results,
-            where={"role": role}  # RBAC Filter directly applied at the DB layer
-        )
+        results = await run_in_threadpool(_query_collection_sync, prompt, role, num_results)
         
         # results["documents"] is a list of lists of strings
         if results and results.get("documents") and len(results["documents"][0]) > 0:
