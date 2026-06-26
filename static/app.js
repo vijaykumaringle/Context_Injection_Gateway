@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Global State ---
     let authToken = localStorage.getItem('gateway_token') || null;
+    let usageChartInstance = null;
 
     // --- DOM Elements ---
     const loginScreen = document.getElementById('login-screen');
@@ -13,11 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentSections = document.querySelectorAll('.content-section');
     const toast = document.getElementById('toast');
     const logsTbody = document.querySelector('#logs-table tbody');
+    const identitiesTbody = document.querySelector('#identities-table tbody');
     const kbForm = document.getElementById('kb-form');
 
     // --- Initialization ---
     if (authToken) {
-        // Optimistically show dashboard, fetch logs will fail if invalid
         showDashboard();
     }
 
@@ -34,7 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function showDashboard() {
         loginScreen.style.display = 'none';
         dashboard.style.display = 'flex';
+        initChart();
         fetchLogs();
+        fetchIdentities();
     }
 
     function handleLogout() {
@@ -48,17 +51,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Tab Switching ---
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-            // Remove active from all
             navButtons.forEach(b => b.classList.remove('active'));
             contentSections.forEach(s => s.classList.remove('active'));
             
-            // Set active
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
             document.getElementById(targetId).classList.add('active');
             
-            if(targetId === 'logs-section') {
+            if(targetId === 'logs-section' || targetId === 'analytics-section') {
                 fetchLogs();
+            }
+            if(targetId === 'identities-section') {
+                fetchIdentities();
             }
         });
     });
@@ -70,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!token) return;
 
         authToken = token;
-        // Test token validity by hitting the protected logs endpoint
         try {
             const resp = await fetch('/api/logs', {
                 headers: { 'Authorization': `Bearer ${authToken}` }
@@ -80,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Authenticated successfully', true);
                 showDashboard();
             } else {
-                handleLogout(); // clear invalid state
+                handleLogout();
                 if (resp.status === 403) {
                     showToast('Access Denied: Admins Only');
                 } else {
@@ -94,7 +97,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     logoutBtn.addEventListener('click', handleLogout);
 
-    // --- Fetch Logs ---
+    // --- Chart Initialization ---
+    function initChart() {
+        const ctx = document.getElementById('usageChart').getContext('2d');
+        if (usageChartInstance) {
+            usageChartInstance.destroy();
+        }
+        usageChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Input Tokens',
+                    data: [],
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }, {
+                    label: 'Output Tokens',
+                    data: [],
+                    borderColor: '#c084fc',
+                    backgroundColor: 'rgba(192, 132, 252, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#f8fafc' } }
+                },
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.1)' }, beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // --- Fetch Logs & Update Analytics ---
     async function fetchLogs() {
         if (!authToken) return;
         try {
@@ -117,14 +160,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            let totalTokens = 0;
+            let totalLatency = 0;
+            const chartLabels = [];
+            const inputData = [];
+            const outputData = [];
+
+            // Sort data chronological for chart
+            const chartData = [...data].reverse();
+
             data.forEach(log => {
                 const tr = document.createElement('tr');
-                
-                // Format date safely
                 const dateRaw = new Date(log.timestamp);
                 const timeStr = isNaN(dateRaw) ? "Invalid Date" : dateRaw.toISOString().replace('T', ' ').substring(0, 19);
 
-                // Format Status Code Badge
                 const isError = log.status_code >= 400;
                 const badgeClass = isError ? 'status-badge status-error' : 'status-badge status-success';
 
@@ -136,10 +185,66 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="${badgeClass}">${log.status_code}</span></td>
                 `;
                 logsTbody.appendChild(tr);
+
+                totalTokens += log.input_tokens + log.output_tokens;
+                totalLatency += log.duration_ms;
             });
+
+            chartData.forEach(log => {
+                const d = new Date(log.timestamp);
+                chartLabels.push(d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'));
+                inputData.push(log.input_tokens);
+                outputData.push(log.output_tokens);
+            });
+
+            // Update stats
+            document.getElementById('stat-req-count').innerText = data.length;
+            document.getElementById('stat-token-count').innerText = totalTokens.toLocaleString();
+            document.getElementById('stat-avg-latency').innerText = Math.round(totalLatency / data.length) + 'ms';
+
+            // Update chart
+            if (usageChartInstance) {
+                usageChartInstance.data.labels = chartLabels;
+                usageChartInstance.data.datasets[0].data = inputData;
+                usageChartInstance.data.datasets[1].data = outputData;
+                usageChartInstance.update();
+            }
         } catch (err) {
             console.error(err);
             showToast('Failed to fetch audit logs');
+        }
+    }
+
+    // --- Fetch Identities ---
+    async function fetchIdentities() {
+        if (!authToken) return;
+        try {
+            const resp = await fetch('/api/users', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                identitiesTbody.innerHTML = '';
+                if (data.length === 0) {
+                    identitiesTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No identities resolved yet.</td></tr>`;
+                    return;
+                }
+                data.forEach(user => {
+                    const tr = document.createElement('tr');
+                    const dateRaw = new Date(user.created_at);
+                    const timeStr = isNaN(dateRaw) ? "Invalid Date" : dateRaw.toISOString().replace('T', ' ').substring(0, 10);
+                    tr.innerHTML = `
+                        <td>${user.user_id}</td>
+                        <td style="font-family: monospace; color: var(--accent-purple);">${user.user_pseudo_id}</td>
+                        <td>${user.role}</td>
+                        <td>${timeStr}</td>
+                    `;
+                    identitiesTbody.appendChild(tr);
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to fetch identities');
         }
     }
 

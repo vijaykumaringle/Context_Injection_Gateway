@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, Request, Response
+from fastapi import FastAPI, Depends, Request, Response, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -56,16 +56,23 @@ async def get_logs(db: Session = Depends(get_db), user: User = Depends(verify_to
     logs = db.query(models.AuditLog).order_by(models.AuditLog.timestamp.desc()).limit(50).all()
     return logs
 
+@app.get("/api/users")
+async def get_users(db: Session = Depends(get_db), user: User = Depends(verify_token)):
+    if user.role != "admin":
+        return Response(status_code=403, content="Admins only")
+    users = db.query(models.APIUser).order_by(models.APIUser.created_at.desc()).limit(50).all()
+    return users
+
 from ratelimiter import check_rate_limit
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-async def catch_all_proxy(request: Request, path: str, user: User = Depends(check_rate_limit)):
+async def catch_all_proxy(request: Request, path: str, background_tasks: BackgroundTasks, user: User = Depends(check_rate_limit)):
     """
     Catch-all route that handles any request sent to the gateway.
     Typically clients will send POST /v1/chat/completions to this gateway instead of api.openai.com.
     """
     logger.debug(f"Intercepted request for /{path} by user {user.user_id}")
-    return await proxy_request(request, user, path)
+    return await proxy_request(request, user, path, background_tasks)
 
 if __name__ == "__main__":
     import uvicorn

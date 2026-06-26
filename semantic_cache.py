@@ -1,5 +1,6 @@
 import uuid
 import logging
+from fastapi.concurrency import run_in_threadpool
 from rag_engine import chroma_client
 
 logger = logging.getLogger("gateway.cache")
@@ -11,17 +12,19 @@ cache_collection = chroma_client.get_or_create_collection(name="semantic_cache")
 # Lower number requires higher exactness (Default l2 distance used)
 CACHE_THRESHOLD = 0.5
 
-def check_semantic_cache(prompt: str, role: str) -> str:
+def _query_cache_sync(prompt: str, role: str):
+    return cache_collection.query(
+        query_texts=[prompt],
+        n_results=1,
+        where={"role": role} 
+    )
+
+async def check_semantic_cache(prompt: str, role: str) -> str:
     """
-    Checks if a highly similar prompt has been asked previously by this role.
-    If yes, returns the cached textual response to completely bypass the LLM.
+    Checks if a highly similar prompt has been asked previously by this role asynchronously.
     """
     try:
-        results = cache_collection.query(
-            query_texts=[prompt],
-            n_results=1,
-            where={"role": role} 
-        )
+        results = await run_in_threadpool(_query_cache_sync, prompt, role)
         
         # Guard against empty cache or totally mismatched results
         if not results or not results.get("distances") or not len(results["distances"][0]):
@@ -42,17 +45,20 @@ def check_semantic_cache(prompt: str, role: str) -> str:
         logger.error(f"Semantic cache retrieval failed: {e}")
         return None
 
-def save_to_cache(prompt: str, role: str, response: str):
+def _add_cache_sync(prompt: str, role: str, response: str, doc_id: str):
+    cache_collection.add(
+        documents=[prompt],
+        metadatas=[{"role": role, "response": response}],
+        ids=[doc_id]
+    )
+
+async def save_to_cache(prompt: str, role: str, response: str):
     """
     Securely saves a successful LLM output into the vector base for future caching.
     """
     try:
         doc_id = str(uuid.uuid4())
-        cache_collection.add(
-            documents=[prompt], # Embed the prompt so future prompts match against it!
-            metadatas=[{"role": role, "response": response}], # Store the actual output safely in metadata
-            ids=[doc_id]
-        )
+        await run_in_threadpool(_add_cache_sync, prompt, role, response, doc_id)
         logger.debug(f"Saved inference output to semantic cache ID: {doc_id}")
     except Exception as e:
         logger.error(f"Failed to write to semantic cache: {e}")

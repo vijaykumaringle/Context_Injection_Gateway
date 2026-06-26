@@ -3,7 +3,7 @@ from rag_engine import retrieve_context_for_role
 
 logger = logging.getLogger("gateway.injector")
 
-def inject_context_into_payload(payload: dict, role: str) -> dict:
+async def inject_context_into_payload(payload: dict, role: str) -> dict:
     """
     Takes an OpenAI-style payload, extracts the last user message to query context,
     and prepends/appends the retrieved RAG context as a system prompt.
@@ -28,7 +28,7 @@ def inject_context_into_payload(payload: dict, role: str) -> dict:
         return payload
         
     # Retrieve context
-    context = retrieve_context_for_role(last_user_msg, role=role)
+    context = await retrieve_context_for_role(last_user_msg, role=role)
     
     if context:
         logger.debug(f"Injecting retrieved context length: {len(context)}")

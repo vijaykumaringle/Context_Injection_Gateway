@@ -6,22 +6,13 @@ def find_user_by_pseudo_id(pseudo_id: str):
     print(f"Searching for identity behind pseudo_id '{pseudo_id}'...")
     
     db = SessionLocal()
-    # Fetch all known raw user_ids
-    users = db.query(APIUser).all()
+    user = db.query(APIUser).filter(APIUser.user_pseudo_id == pseudo_id).first()
     
-    found = False
-    for user in users:
-        # Recreate the exact same hash we use in logger.py
-        test_hash = hashlib.sha256(user.user_id.encode()).hexdigest()[:16]
-        
-        if test_hash == pseudo_id:
-            print(f"🚨 MATCH FOUND! 🚨")
-            print(f"The identity belongs to: {user.user_id}")
-            print(f"Registered Role: {user.role}")
-            found = True
-            break
-            
-    if not found:
+    if user:
+        print(f"🚨 MATCH FOUND! 🚨")
+        print(f"The identity belongs to: {user.user_id}")
+        print(f"Registered Role: {user.role}")
+    else:
         print("No matching user found in the database. The user might have been deleted, or the hash is invalid.")
         
     db.close()
