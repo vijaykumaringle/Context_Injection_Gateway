@@ -18,7 +18,12 @@ from rag_engine import add_document_to_kb
 # Ensure tables are created
 models.Base.metadata.create_all(bind=engine)
 
+from prometheus_fastapi_instrumentator import Instrumentator
+
 app = FastAPI(title="Context Injection Gateway")
+
+# Expose Prometheus /metrics endpoint
+Instrumentator().instrument(app).expose(app)
 
 # Mount Static Files for the Dashboard
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -7,3 +7,8 @@ python-jose[cryptography]
 python-dotenv
 sqlalchemy
 rank_bm25
+tiktoken
+sentence-transformers
+transformers
+torch
+prometheus-fastapi-instrumentator

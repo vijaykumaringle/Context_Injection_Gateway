@@ -1,12 +1,17 @@
 import logging
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
+from prometheus_client import Counter
+
+# Custom Prometheus Metrics
+total_tokens_counter = Counter("gateway_total_tokens", "Total tokens consumed", ["role"])
+semantic_cache_hits = Counter("gateway_semantic_cache_hits", "Number of semantic cache hits", ["role"])
 
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_data = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger_name": record.name,
             "message": record.getMessage(),
@@ -51,6 +56,10 @@ def log_api_request(user_id: str, role: str, path: str, input_tokens: int = 0, o
     }
     
     logger.info("Outbound LLM API Request", extra={"extra_info": extra_info})
+    
+    # Update Prometheus Token Metric
+    if input_tokens + output_tokens > 0:
+        total_tokens_counter.labels(role=role).inc(input_tokens + output_tokens)
 
     # Save to Relational DB
     try:

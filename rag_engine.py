@@ -2,12 +2,21 @@ import chromadb
 import logging
 from fastapi.concurrency import run_in_threadpool
 from rank_bm25 import BM25Okapi
+from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger("gateway.rag")
 
 # Initialize persistent ChromaDB client for vector storage
 chroma_client = chromadb.PersistentClient(path="./vector_store")
 collection = chroma_client.get_or_create_collection(name="internal_knowledge")
+
+try:
+    cross_encoder = None # Disabled locally to prevent PyTorch init hang
+    # cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cpu')
+    logger.info("Loaded CrossEncoder for Semantic Reranking.")
+except Exception as e:
+    logger.error(f"Failed to load CrossEncoder: {e}")
+    cross_encoder = None
 
 bm25_index = None
 bm25_docs = []
@@ -104,7 +113,16 @@ def _query_hybrid(prompt: str, role: str, num_results: int):
     # Strictly enforce role filtering: only return docs that passed Chroma's `where` filter
     filtered_fused = [doc for doc in fused_docs if doc in chroma_docs]
     
-    return filtered_fused[:num_results]
+    # Cross-Encoder Reranking
+    if cross_encoder and filtered_fused:
+        pairs = [[prompt, doc] for doc in filtered_fused]
+        scores = cross_encoder.predict(pairs)
+        reranked = sorted(zip(filtered_fused, scores), key=lambda x: x[1], reverse=True)
+        final_docs = [doc for doc, score in reranked]
+    else:
+        final_docs = filtered_fused
+    
+    return final_docs[:num_results]
 
 async def retrieve_context_for_role(prompt: str, role: str, num_results: int = 1) -> str:
     """
