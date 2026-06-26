@@ -1,5 +1,6 @@
 import uuid
 import logging
+import time
 from fastapi.concurrency import run_in_threadpool
 from rag_engine import chroma_client
 
@@ -33,9 +34,20 @@ async def check_semantic_cache(prompt: str, role: str) -> str:
         distance = results["distances"][0][0]
         
         if distance < CACHE_THRESHOLD:
+            meta = results["metadatas"][0][0]
+            timestamp = meta.get("timestamp", 0)
+            
+            # Check 24 hour TTL
+            if time.time() - float(timestamp) > 86400:
+                logger.info("Semantic cache expired (TTL). Purging.")
+                def _del():
+                    cache_collection.delete(ids=[results["ids"][0][0]])
+                await run_in_threadpool(_del)
+                return None
+                
             logger.info(f"SEMANTIC CACHE HIT! Distance: {distance:.3f} | Bypassing LLM.")
             # Response is securely stored in the metadata since the document itself is the embedded prompt
-            cached_response = results["metadatas"][0][0]["response"]
+            cached_response = meta["response"]
             return cached_response
             
         logger.debug(f"Semantic Cache Miss. Closest distance: {distance:.3f} (Requires < {CACHE_THRESHOLD})")
@@ -48,7 +60,7 @@ async def check_semantic_cache(prompt: str, role: str) -> str:
 def _add_cache_sync(prompt: str, role: str, response: str, doc_id: str):
     cache_collection.add(
         documents=[prompt],
-        metadatas=[{"role": role, "response": response}],
+        metadatas=[{"role": role, "response": response, "timestamp": time.time()}],
         ids=[doc_id]
     )
 

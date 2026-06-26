@@ -28,6 +28,7 @@
             <button class="nav-btn" data-target="logs-section">Audit Stream</button>
             <button class="nav-btn" data-target="identities-section">Identities</button>
             <button class="nav-btn" data-target="kb-section">Knowledge Base</button>
+            <button class="nav-btn" data-target="apikeys-section">API Keys</button>
             <div style="flex-grow: 1;"></div>
             <button class="nav-btn" id="logout-btn" style="color: var(--accent-red); margin-top: auto;">Sign Out</button>
         </div>
@@ -132,6 +133,46 @@
                     
                     <button type="submit" style="width: auto; padding: 0.75rem 2rem;">Inject Vector</button>
                 </form>
+            </div>
+
+            <!-- API Keys Section -->
+            <div id="apikeys-section" class="content-section">
+                <div class="section-header">
+                    <h3>API Key Management</h3>
+                    <p>Manage tiered access for consumers.</p>
+                </div>
+                
+                <form id="apikeys-form" style="margin-bottom: 2rem; max-width: 600px;">
+                    <div style="display: flex; gap: 1rem;">
+                        <div class="form-group" style="flex: 2;">
+                            <label>User ID</label>
+                            <input type="text" id="apikey-user" placeholder="e.g. user_992" required>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Tier</label>
+                            <select id="apikey-tier" style="width: 100%; padding: 0.75rem; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px;">
+                                <option value="free">Free</option>
+                                <option value="pro">Pro</option>
+                                <option value="enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" style="width: auto; padding: 0.75rem 2rem;">Generate Key</button>
+                </form>
+
+                <table id="apikeys-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Prefix</th>
+                            <th>Tier</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
             </div>
 
         </div>

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Index
+from sqlalchemy import Column, Integer, String, DateTime, Index, Boolean
 from datetime import datetime
 from database import Base
 
@@ -26,3 +26,14 @@ class AuditLog(Base):
     output_tokens = Column(Integer, default=0)
     status_code = Column(Integer, nullable=False)
     duration_ms = Column(Integer, nullable=False)
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key_hash = Column(String, unique=True, index=True, nullable=False)
+    prefix = Column(String, nullable=False)
+    user_id = Column(String, nullable=False)
+    tier = Column(String, default="free")
+    is_revoked = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
