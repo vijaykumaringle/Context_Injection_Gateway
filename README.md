@@ -1,5 +1,7 @@
 # Context Injection Gateway (Enterprise Edition)
 
+Context Injection Gateway is an enterprise context orchestration layer that sits between applications and LLMs, dynamically assembling secure, policy-aware, role-specific context before every inference request.
+
 A headless, high-performance reverse proxy middleware designed to intercept outbound LLM API requests and dynamically inject authoritative, role-restricted RAG context from internal databases prior to model inference.
 
 Built with FastAPI, httpx, ChromaDB, BM25, and SQLAlchemy. Features robust Security Interceptors, Advanced RAG, Tiered Rate Limiting, and a premium visual dashboard.
